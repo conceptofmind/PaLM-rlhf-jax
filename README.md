@@ -6,6 +6,8 @@ Built in collaboration with [Phil 'Lucidrains' Wang](https://github.com/lucidrai
 ## PaLM + RLHF - JAX (WIP)
 Implementation of the Transformer architecture from <a href="https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html">PaLM - Scaling Language Modeling with Pathways</a> - in Jax with RLHF. Using the [Flax](https://github.com/google/flax) framework.
 
+### Looking for Data Engineers familiar with JAX and training on TPUs
+
 ## Usage
 
 The model does not require `vmap` to train.
@@ -34,8 +36,13 @@ print(f"Number of parameters in Flax model: {n_params_flax}") # 55073280
 ```
 
 ## TODO:
-- [] Finish building model architecture
-- [] Looking for Data Engineers familiar with JAX and training on TPUs
+- [X] Finish building base model architecture
+- [] Add XPOS
+- [] Add LoRA
+- [] Add Encoder-Decoder
+- [] Add Trainer
+- [] Add Enwiki8
+
 
 ## Author:
 - Enrico Shippole
