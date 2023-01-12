@@ -1,12 +1,22 @@
 <img src="./palm.gif" width="450px"></img>
 
+## PaLM + RLHF - JAX (WIP)
+Implementation of the Transformer architecture from <a href="https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html">PaLM - Scaling Language Modeling with Pathways</a> - in Jax with RLHF (Reinforcement Learning with Human Feedback). Using the [Flax](https://github.com/google/flax) framework.
+
 ## Acknowledgement:
 Built in collaboration with [Phil 'Lucidrains' Wang](https://github.com/lucidrains). Please check out his [open-source implementations](https://github.com/lucidrains) of multiple different transformer architectures and [support](https://github.com/sponsors/lucidrains) his work.
 
-## PaLM + RLHF - JAX (WIP)
-Implementation of the Transformer architecture from <a href="https://ai.googleblog.com/2022/04/pathways-language-model-palm-scaling-to.html">PaLM - Scaling Language Modeling with Pathways</a> - in Jax with RLHF. Using the [Flax](https://github.com/google/flax) framework.
-
 ### Looking for Data Engineers familiar with JAX and training on TPUs
+
+## FAQ
+
+- Does this contain a model for inference?
+
+There is no trained model. I am part of the TRC program so I will be looking into training a small model.
+
+## Community
+
+<a href="https://carper.ai/">CarperAI</a> had been working on <a href="https://github.com/CarperAI/trlx">an RLHF framework</a> for large language models for many months prior to the release of ChatGPT.
 
 ## Usage
 
@@ -37,11 +47,11 @@ print(f"Number of parameters in Flax model: {n_params_flax}") # 55073280
 
 ## TODO:
 - [X] Finish building base model architecture
-- [] Add XPOS
-- [] Add LoRA
-- [] Add Encoder-Decoder
-- [] Add Trainer
-- [] Add Enwiki8
+- [ ] Add XPOS
+- [ ] Add LoRA
+- [ ] Add Encoder-Decoder
+- [ ] Add Trainer
+- [ ] Add Enwiki8
 
 
 ## Author:
@@ -63,5 +73,33 @@ print(f"Number of parameters in Flax model: {n_params_flax}") # 55073280
   url = {http://github.com/google/flax},
   version = {0.5.0},
   year = {2020},
+}
+```
+
+```bibtex
+@article{Stiennon2020LearningTS,
+    title   = {Learning to summarize from human feedback},
+    author  = {Nisan Stiennon and Long Ouyang and Jeff Wu and Daniel M. Ziegler and Ryan J. Lowe and Chelsea Voss and Alec Radford and Dario Amodei and Paul Christiano},
+    journal = {ArXiv},
+    year    = {2020},
+    volume  = {abs/2009.01325}
+}
+```
+
+```bibtex
+@article{Hu2021LoRALA,
+    title   = {LoRA: Low-Rank Adaptation of Large Language Models},
+    author  = {Edward J. Hu and Yelong Shen and Phillip Wallis and Zeyuan Allen-Zhu and Yuanzhi Li and Shean Wang and Weizhu Chen},
+    journal = {ArXiv},
+    year    = {2021},
+    volume  = {abs/2106.09685}
+}
+```
+
+```bibtex
+@inproceedings{Sun2022ALT,
+  title     = {A Length-Extrapolatable Transformer},
+  author    = {Yutao Sun and Li Dong and Barun Patra and Shuming Ma and Shaohan Huang and Alon Benhaim and Vishrav Chaudhary and Xia Song and Furu Wei},
+  year      = {2022}
 }
 ```
