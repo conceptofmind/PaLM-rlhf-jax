@@ -244,32 +244,6 @@ class CrossAttention(nn.Module):
         return nn.Dense(features = self.dim, use_bias=False)(out)
 
 
-# transformer
-
-class ParallelTransformer(nn.Module):
-    dim: int
-    depth: int
-    heads: int
-    dim_head: int
-    ff_mult: int = 4
-
-    @nn.compact
-    def __call__(self, x):
-        layers = []
-        for _ in range(self.depth):
-            layers.append(
-                PreNorm(ParallelTransformerBlock(
-                    self.dim, 
-                    self.dim_head, 
-                    self.heads, 
-                    self.ff_mult,
-                    
-                ))
-            )
-        for block in layers:
-            x = block(x) + x
-        return x
-
 # model
 
 class PaLM(nn.Module): 
