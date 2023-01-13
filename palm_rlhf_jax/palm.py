@@ -3,6 +3,7 @@ from einops import rearrange
 import jax.numpy as jnp
 from jax.numpy import einsum
 from typing import Callable
+from palm_rlhf_jax.lora import LoRA
 
 ATTN_MASK_VALUE = -1e10
 
@@ -118,7 +119,7 @@ class ParallelTransformerBlock(nn.Module):
 
         n = x.shape[1]
 
-        split_indices = numpy.cumsum(fused_dims[:-1])
+        split_indices = jnp.cumsum(fused_dims[:-1])
 
         # attention queries, keys, values, and feedforward inner
         fused_attn_ff_proj = nn.Dense(features = sum(fused_dims), use_bias=False)(x)
@@ -249,13 +250,34 @@ class CrossAttention(nn.Module):
 class PaLM(nn.Module): 
     dim: int 
     num_tokens: int
-    depth: int 
+    depth: int
+    causal: bool = True 
     dim_head: int = 64 
     heads: int = 8 
     ff_mult: int = 4
+    attn_dropout: float = 0.
+    ff_dropout: float = 0.
+    lora_r: int = 8
+    rotary_xpos_scale_base: int = 512
+    fintune_scopes: tuple = tuple()
+    cross_entropy_ignore_index: int = 0
+    cross_attend: bool = False
+    default_start_token_id = None
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(
+        self, 
+        x,
+        mask = None,
+        context = None,
+        context_mask = None,
+        return_loss = False,
+        disable_lora = False,
+        finetune_scope = None,
+        extra_embed = None,
+        return_only_embedding = False,
+        return_logits_with_embedding = False
+    ):
         embed = nn.Embed(self.num_tokens, self.dim, embedding_init = nn.initializers.normal(stddev=0.02))
         x = embed(x)
         x = ParallelTransformer(dim=self.dim, depth=self.depth, heads=self.heads, dim_head=self.dim_head, ff_mult=self.ff_mult)(x)
