@@ -24,6 +24,6 @@ class LoRA(nn.Module):
         scale = alpha / self.r
 
         A = self.param('A', nn.initializers.normal(stddev = 0.02), (self.dim, self.r))
-        B = self.param('B', nn.initializers.normal(stddev = 0.02), (self.r, self.dim_out))
+        B = self.param('B', nn.initializers.zeros, (self.r, self.dim_out))
 
         return jnp.dot(x, jnp.dot(A, B)) * scale
