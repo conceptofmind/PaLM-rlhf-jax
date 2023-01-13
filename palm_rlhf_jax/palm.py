@@ -66,7 +66,7 @@ class RotaryEmbedding(nn.Module):
         return freq, scale 
 
 def rotate_half(x):
-    x1, x2 = jax.split(x, 2, axis = -1)
+    x1, x2 = x.split(2, axis = -1)
     return jnp.concatenate((-x2, x1), axis = -1)
 
 def apply_rotary_pos_emb(pos, t, scale = 1.):
@@ -87,11 +87,29 @@ class SwiGLU(nn.Module):
 class ParallelTransformerBlock(nn.Module):
     dim: int
     dim_head: int = 64
+    causal: bool = True
     heads: int = 8
     ff_mult: int = 4
+    attn_dropout = 0.
+    ff_dropout = 0.
+    use_xpos: bool = True
+    xpos_scale_base: int = 512
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(
+        self, 
+        x, 
+        mask = None, 
+        finetune_modules = None
+    ):
+        """
+        einstein notation
+        b - batch
+        h - heads
+        n, i, j - sequence length (base sequence length, source, target)
+        d - feature dimension
+        """
+
         attn_inner_dim = self.dim_head * self.heads
         ff_inner_dim = self.dim * self.ff_mult
         fused_dims = (attn_inner_dim, self.dim_head, self.dim_head, (ff_inner_dim * 2))
@@ -107,6 +125,16 @@ class ParallelTransformerBlock(nn.Module):
 
         q, k, v, ff = jnp.split(fused_attn_ff_proj, split_indices, axis = -1)
 
+        # finetune loras
+
+        lora_q = lora_k = lora_v = lora_o = None
+
+        if exists(finetune_modules):
+            lora_q, lora_k, lora_v, lora_o = finetune_modules
+            q = q + lora_q(x)
+            k = k + lora_k(x)
+            v = v + lora_v(x)
+
         # split heads
         # they use multi-query single-key-value attention, yet another Noam Shazeer paper
         # they found no performance loss past a certain scale, and more efficient decoding obviously
@@ -114,43 +142,56 @@ class ParallelTransformerBlock(nn.Module):
 
         q = rearrange(q, "b n (h d) -> b h n d", h = self.heads)
 
-        # rotary embeddings
-        positions = RotaryEmbedding(self.dim_head)(n)
-
-        if positions is not None and positions.shape[-2] >= n:
-            positions = positions[:n]
-            
-        q, k = map(lambda t: apply_rotary_pos_emb(positions, t), (q, k))
-
-        # scale
         q = q * scale
+
+        # rotary embeddings
+        positions, scale = RotaryEmbedding(self.dim_head, scale_base = self.xpos_scale_base, use_xpos = self.use_xpos and self.causal)(n)
+
+        if exists(positions) and positions.shape[-2] >= n:
+            positions = positions[:n]
+            scale = scale[:n]
+            
+        q = apply_rotary_pos_emb(positions, q, scale)
+        k = apply_rotary_pos_emb(positions, k, scale ** -1)
 
         # similarity
         sim = einsum("b h i d, b j d -> b h i j", q, k)
 
-        # causal mask
-        mask = jnp.tril(jnp.ones((n, n)))
+        # key padding mask
 
-        if mask is not None and mask.shape[-1] >= n:
+        if exists(mask):
+            mask = rearrange(mask, 'b j -> b 1 1 j')
+            sim = jnp.where(~mask, sim, ATTN_MASK_VALUE)
+
+        # causal mask
+
+        if exists(mask) and mask.shape[-1] >= n:
             mask = mask[:n, :n]
+
+        mask = jnp.ones((n, n)).triu(1)
 
         sim = jnp.where(mask, sim, ATTN_MASK_VALUE)
 
         # attention
         attn = nn.softmax(sim, axis = -1)
+        attn = nn.Dropout(rate = self.attn_dropout)(attn)
 
         # aggregate values
         attn_out = einsum("b h i j, b j d -> b h i d", attn, v)
 
         # attention out
-        attn_out = rearrange(attn_out, "b h n d -> b n (h d)")
-        attn_out = nn.Dense(self.dim, use_bias=False)(attn_out)
+        out = rearrange(attn_out, "b h n d -> b n (h d)")
+        attn_out = nn.Dense(self.dim, use_bias=False)(out)
 
         # feedforward out
         ff_out = SwiGLU()(ff)
         ff_out = nn.Dense(self.dim, use_bias=False)(ff_out)
 
         # merge heads
+
+        if exists(lora_o):
+            attn_out = attn_out + lora_o(out)
+
         merge_heads = attn_out + ff_out
         return merge_heads
 
