@@ -6,6 +6,21 @@ from typing import Callable
 
 ATTN_MASK_VALUE = -1e10
 
+# functions and decorators
+
+def exists(val):
+    return val is not None
+
+def default(val, d):
+    if exists(val):
+        return val
+    return d() if callable(d) else d
+
+def identity(t, *args, **kwargs):
+    return t
+
+# PreNorm
+
 class PreNorm(nn.Module):
     fn: Callable
 
@@ -14,29 +29,48 @@ class PreNorm(nn.Module):
         x = nn.LayerNorm(epsilon = 1e-5, use_bias = False)(x)
         return self.fn(x, **kwargs)
 
-# rotary positional embedding
-# https://arxiv.org/abs/2104.09864
+# Residual
 
-class RotaryEmbedding(nn.Module):
-    dim_head: int         
+class Residual(nn.Module):
+    fn: Callable
 
     @nn.compact
-    def __call__(self, max_seq_len):
-        inv_freq = 1.0 / (10000 ** (jnp.arange(0, self.dim_head, 2) / self.dim_head))
-        seq = jnp.arange(max_seq_len)
-        freqs = einsum("i , j -> i j", seq, inv_freq)
-        return jnp.concatenate((freqs, freqs), axis = -1)
+    def __call__(self, x, **kwargs):
+        y = self.fn(x, **kwargs)
+        return x + y
 
-def jax_unstack(x, axis = 0):
-    return jnp.moveaxis(x, axis, 0)
+
+# rotary positional embedding w/ xpos
+# https://arxiv.org/abs/2104.09864
+# https://arxiv.org/abs/2212.10554v1
+
+class RotaryEmbedding(nn.Module):
+    dim: int
+    scale_base: int = 512
+    use_xpos: bool = True         
+
+    @nn.compact
+    def __call__(self, seq_len):
+        inv_freq = 1.0 / (10000 ** (jnp.arange(0, self.dim, 2) / self.dim))
+        scale = (jnp.arange(0, self.dim, 2) + 0.4 * self.dim) / (1.4 * self.dim)
+
+        seq = jnp.arange(seq_len)
+        freqs = einsum("i , j -> i j", seq, inv_freq)
+        freq = jnp.concatenate((freqs, freqs), axis = -1)
+
+        if not self.use_xpos:
+            return freqs, jnp.ones(1)
+
+        power = (seq - (seq_len // 2 )) / self.scale_base
+        scale = scale ** rearrange(power, 'n -> n 1')
+        return freq, scale 
 
 def rotate_half(x):
-    x = rearrange(x, "... (j d) -> ... j d", j = 2)
-    x1, x2 = jax_unstack(x, axis = -2)
+    x1, x2 = jax.split(x, 2, axis = -1)
     return jnp.concatenate((-x2, x1), axis = -1)
 
-def apply_rotary_pos_emb(pos, t):
-    return (t * jnp.cos(pos)) + (rotate_half(t) * jnp.sin(pos))
+def apply_rotary_pos_emb(pos, t, scale = 1.):
+    return (t * jnp.cos(pos) * scale) + (rotate_half(t) * jnp.sin(pos) * scale)
 
 # classic Noam Shazeer paper, except here they use SwiGLU instead of the more popular GEGLU for gating the feedforward
 # https://arxiv.org/abs/2002.05202
