@@ -185,6 +185,7 @@ class ParallelTransformerBlock(nn.Module):
 
         # feedforward out
         ff_out = SwiGLU()(ff)
+        ff_out = nn.Dropout(rate = self.ff_dropout)(ff_out)
         ff_out = nn.Dense(self.dim, use_bias=False)(ff_out)
 
         # merge heads
@@ -194,6 +195,54 @@ class ParallelTransformerBlock(nn.Module):
 
         merge_heads = attn_out + ff_out
         return merge_heads
+
+# cross attention block
+
+class CrossAttention(nn.Module):
+    dim: int
+    dim_head: int = 64
+    heads: int = 8
+    dropout = 0.
+
+    @nn.compact
+    def __call__(
+        self,
+        x,
+        kv,
+        context_mask = None,
+    ):
+        scale = self.dim_head ** -0.5
+
+        # queries, keys, values
+
+        q, k, v = nn.Dense(features = self.inner_dim, use_bias=False)(x), *kv
+
+        # split out heads and scale queries
+
+        q = rearrange(q, 'b n (h d) -> b h n d', h = self.heads)
+        q = q * scale
+
+        # similarity
+
+        sim = einsum('b h i d, b j d -> b h i j', q, k)
+
+        # attention
+
+        attn = nn.softmax(sim, dim = -1)
+        attn = nn.Dropout(rate = self.dropout)(attn)
+
+        # aggregate values
+
+        out = einsum('b h i j, b j d -> b h i d', attn, v)
+
+        # merge heads
+
+        out = rearrange(out, 'b h n d -> b n (h d)')
+
+        # combine heads
+
+        return nn.Dense(features = self.dim, use_bias=False)(out)
+
 
 # transformer
 
@@ -209,7 +258,13 @@ class ParallelTransformer(nn.Module):
         layers = []
         for _ in range(self.depth):
             layers.append(
-                PreNorm(ParallelTransformerBlock(self.dim, self.dim_head, self.heads, self.ff_mult))
+                PreNorm(ParallelTransformerBlock(
+                    self.dim, 
+                    self.dim_head, 
+                    self.heads, 
+                    self.ff_mult,
+                    
+                ))
             )
         for block in layers:
             x = block(x) + x
