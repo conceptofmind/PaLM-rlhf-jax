@@ -174,7 +174,7 @@ class ParallelTransformerBlock(nn.Module):
 
         # attention
         attn = nn.softmax(sim, axis = -1)
-        attn = nn.Dropout(rate = self.attn_dropout)(attn)
+        attn = nn.Dropout(rate = self.attn_dropout)(attn, deterministic=False)
 
         # aggregate values
         attn_out = einsum("b h i j, b j d -> b h i d", attn, v)
@@ -185,7 +185,7 @@ class ParallelTransformerBlock(nn.Module):
 
         # feedforward out
         ff_out = SwiGLU()(ff)
-        ff_out = nn.Dropout(rate = self.ff_dropout)(ff_out)
+        ff_out = nn.Dropout(rate = self.ff_dropout)(ff_out, deterministic = False)
         ff_out = nn.Dense(self.dim, use_bias=False)(ff_out)
 
         # merge heads
@@ -229,7 +229,7 @@ class CrossAttention(nn.Module):
         # attention
 
         attn = nn.softmax(sim, dim = -1)
-        attn = nn.Dropout(rate = self.dropout)(attn)
+        attn = nn.Dropout(rate = self.dropout)(attn, deterministic=False)
 
         # aggregate values
 
